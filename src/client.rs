@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use futures::{stream, SinkExt};
+use futures::SinkExt;
 use srt_tokio::SrtSocket;
 use std::{io, time::Duration, time::Instant};
 use tokio::time::sleep;
