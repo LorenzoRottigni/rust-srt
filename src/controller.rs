@@ -1,103 +1,43 @@
-use futures::StreamExt;
-use opencv::prelude::MatExprTraitConst;
-use opencv::{
-    core::{self, Mat, Point, Scalar},
-    highgui, imgcodecs,
-    imgproc::{put_text, FONT_HERSHEY_SIMPLEX, LINE_AA},
-};
+use opencv::{core::Vector, highgui, imgcodecs, prelude::*};
 use srt_tokio::SrtSocket;
-use std::time::{Duration, Instant};
-use tokio::runtime::Runtime;
-use tokio::sync::mpsc;
+use futures::stream::StreamExt;
+use tokio::time::{sleep, Duration};
+use std::net::SocketAddr;
 
-fn main() -> opencv::Result<()> {
-    println!("Controller starting…");
+#[tokio::main]
+async fn main() -> opencv::Result<()> {
+    let port = 2223;
+    let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
+    println!("Controller listening on {}", addr);
 
-    let (tx_frame, mut rx_frame) = mpsc::channel::<Vec<u8>>(32);
+    // Listen on TCP-like SRT socket
+    let mut socket = SrtSocket::builder()
+        .listen_on(addr)
+        .await
+        .expect("Failed to listen on SRT socket");
 
-    // Spawn network thread
-    std::thread::spawn(move || {
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async move {
-            // Listen mode
-            let mut socket = SrtSocket::builder()
-                .latency(Duration::from_millis(120))
-                .listen_on(2223)
-                .await
-                .expect("SRT bind failed");
+    println!("SRT handshake complete, waiting for frames...");
 
-            println!("Waiting for tenant...");
+    while let Some(frame_res) = socket.next().await {
+        match frame_res {
+            Ok((_ts, bytes)) => {
+                println!("Received frame: {} bytes", bytes.len());
 
-            // According to docs, SrtSocket in listen mode implements Stream of (Instant, Bytes)
-            while let Some(Ok((_ts, data))) = socket.next().await {
-                if tx_frame.send(data.to_vec()).await.is_err() {
-                    eprintln!("UI closed, stopping network thread");
+                let buf: Vec<u8> = bytes.to_vec();
+                let vec_u8 = Vector::<u8>::from_iter(buf);
+                let mat = imgcodecs::imdecode(&vec_u8, imgcodecs::IMREAD_COLOR)?;
+                highgui::imshow("Tenant Camera", &mat)?;
+                if highgui::wait_key(1)? == 27 {
                     break;
                 }
             }
-
-            println!("❌ Tenant disconnected or socket closed");
-        });
-    });
-
-    // GUI (simplified)
-    highgui::named_window("SRT Stream", highgui::WINDOW_AUTOSIZE)?;
-    println!("Waiting for frames…");
-
-    let mut last_frame_time = Instant::now();
-    loop {
-        let mat = match rx_frame.try_recv() {
-            Ok(buf) => {
-                last_frame_time = Instant::now();
-                let cv_buf = core::Vector::<u8>::from_slice(&buf);
-                match imgcodecs::imdecode(&cv_buf, imgcodecs::IMREAD_COLOR) {
-                    Ok(m) => m,
-                    Err(_) => {
-                        let mut img = Mat::zeros(480, 640, core::CV_8UC3)?.to_mat()?;
-                        put_text(
-                            &mut img,
-                            "No stream attached",
-                            Point::new(50, 200),
-                            FONT_HERSHEY_SIMPLEX,
-                            1.0,
-                            Scalar::new(255., 255., 255., 0.),
-                            2,
-                            LINE_AA,
-                            false,
-                        )?;
-                        img
-                    }
-                }
+            Err(e) => {
+                eprintln!("Error receiving frame: {e}");
             }
-            Err(_) => {
-                let mut img = Mat::zeros(480, 640, core::CV_8UC3)?.to_mat()?;
-                let text = if last_frame_time.elapsed() > Duration::from_secs(2) {
-                    "No tenant attached"
-                } else {
-                    "Waiting for frame..."
-                };
-                put_text(
-                    &mut img,
-                    text,
-                    Point::new(50, 200),
-                    FONT_HERSHEY_SIMPLEX,
-                    1.0,
-                    Scalar::new(255., 255., 255., 0.),
-                    2,
-                    LINE_AA,
-                    false,
-                )?;
-                img
-            }
-        };
-
-        highgui::imshow("SRT Stream", &mat)?;
-        let key = highgui::wait_key(30)?;
-        if key == 27 {
-            break;
         }
+
+        sleep(Duration::from_millis(1)).await;
     }
 
-    println!("Stream ended.");
     Ok(())
 }

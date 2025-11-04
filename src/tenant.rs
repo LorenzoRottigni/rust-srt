@@ -1,75 +1,48 @@
-use bytes::Bytes;
-use futures_util::sink::SinkExt; // Needed for `send`
-use opencv::{core, highgui, imgcodecs, prelude::*, videoio};
+use opencv::{prelude::*, videoio, core::Vector, imgcodecs};
 use srt_tokio::SrtSocket;
-use std::time::{Duration, Instant};
-use tokio::time::sleep;
+use bytes::Bytes;
+use futures_util::sink::SinkExt;
+use tokio::time::{sleep, Duration};
+use std::time::Instant;
 
 #[tokio::main]
-async fn main() -> opencv::Result<()> {
-    println!("Tenant starting…");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let addr = "127.0.0.1:2223";
+    println!("Tenant connecting to {}", addr);
 
-    // Connect to controller
-    let mut socket = match SrtSocket::builder()
-        .latency(Duration::from_millis(120))
-        .call("127.0.0.1:2223", None)
+    // Only an optional stream_id is allowed (None = no stream_id)
+    let mut socket = SrtSocket::builder()
+        .call(addr, None) // ✅ just None
         .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("❌ Failed to connect to controller: {}", e);
-            return Ok(());
-        }
-    };
-    println!("✅ Connected to controller");
+        .expect("Failed to connect to controller");
+
+    println!("SRT handshake complete, starting camera...");
 
     // Open default camera
-    let mut cam = match videoio::VideoCapture::new(0, videoio::CAP_ANY) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("❌ Failed to open camera: {}", e);
-            return Ok(());
-        }
-    };
+    let mut cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
     if !videoio::VideoCapture::is_opened(&cam)? {
-        eprintln!("❌ Camera is not opened");
-        return Ok(());
+        panic!("Cannot open camera");
     }
 
+    let mut frame_count = 0;
+
     loop {
-        let mut frame = core::Mat::default();
-        if !cam.read(&mut frame)? {
-            continue;
-        }
+        let mut frame = Mat::default();
+        cam.read(&mut frame)?;
         if frame.empty() {
             continue;
         }
 
-        // Encode as JPEG
-        let mut buf = core::Vector::<u8>::new();
-        if imgcodecs::imencode(".jpg", &frame, &mut buf, &core::Vector::new()).is_err() {
-            eprintln!("❌ Failed to encode frame");
-            continue;
-        }
+        // Encode frame to JPEG
+        let mut buf = Vector::<u8>::new();
+        imgcodecs::imencode(".jpg", &frame, &mut buf, &Vector::<i32>::new())?;
 
-        // Send over SRT as (Instant, Bytes)
-        let data = Bytes::from(buf.to_vec());
-        if let Err(e) = socket.send((Instant::now(), data)).await {
-            eprintln!("❌ Failed to send frame: {}", e);
-            break;
-        }
+        frame_count += 1;
+        println!("Sending frame {}: {} bytes", frame_count, buf.len());
 
-        // Optional local preview
-        if highgui::imshow("Tenant preview", &frame).is_err() {
-            eprintln!("❌ Failed to show preview");
-        }
-        if highgui::wait_key(1)? == 27 {
-            break; // ESC to quit
-        }
+        // Send (timestamp, bytes)
+        socket.send((Instant::now(), Bytes::from(buf.to_vec()))).await?;
 
         sleep(Duration::from_millis(33)).await; // ~30 FPS
     }
-
-    println!("Tenant exiting.");
-    Ok(())
 }
