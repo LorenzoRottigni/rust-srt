@@ -19,6 +19,15 @@ path = "src/controller.rs"
 name = "tenant"
 path = "src/tenant.rs"
 
+[[bin]]
+name = "master"
+path = "src/master.rs"
+
+[[bin]]
+name = "slave"
+path = "src/slave.rs"
+
+
 [dependencies]
 bytes = "1.10.1"
 futures = "0.3.31"
