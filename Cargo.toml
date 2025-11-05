@@ -27,12 +27,21 @@ path = "src/master.rs"
 name = "slave"
 path = "src/slave.rs"
 
+[[bin]]
+name = "sender"
+path = "src/sender.rs"
+
+[[bin]]
+name = "receiver"
+path = "src/receiver.rs"
 
 [dependencies]
+anyhow = "1.0.100"
 bytes = "1.10.1"
 futures = "0.3.31"
 futures-util = "0.3.31"
 image = "0.25.8"
-opencv = "0.97.0"
+opencv = { version = "0.97.0" }
 srt-tokio = "0.4.4"
 tokio = { version = "1.48.0", features = ["full"] }
+
