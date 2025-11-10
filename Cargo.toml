@@ -35,13 +35,27 @@ path = "src/sender.rs"
 name = "receiver"
 path = "src/receiver.rs"
 
+[[bin]]
+name = "sender_debug"
+path = "src/sender_debug.rs"
+
+[[bin]]
+name = "receiver_debug"
+path = "src/receiver_debug.rs"
+
+[[bin]]
+name = "ts_streamer"
+path = "src/ts_streamer.rs"
+
 [dependencies]
+ac-ffmpeg = "0.19.0"
 anyhow = "1.0.100"
 bytes = "1.10.1"
 futures = "0.3.31"
 futures-util = "0.3.31"
 image = "0.25.8"
 opencv = { version = "0.97.0" }
-srt-tokio = "0.4.4"
+srt-tokio = { version="0.4.4", features = ["ac-ffmpeg"] }
 tokio = { version = "1.48.0", features = ["full"] }
+tokio-stream = "0.1.17"
 

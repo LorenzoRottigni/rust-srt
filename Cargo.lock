@@ -3,6 +3,53 @@
 version = 4
 
 [[package]]
+name = "ac-ffmpeg"
+version = "0.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0588df08ca58981a1f4aafb812f9bc9d1fdcbd69b3657c23bb3234bdd8a094a4"
+dependencies = [
+ "ac-ffmpeg-build",
+ "ac-ffmpeg-features",
+ "cc",
+ "lazy_static",
+ "rustc_version",
+]
+
+[[package]]
+name = "ac-ffmpeg"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd5735fde11540ea2a6e5cc93fea7fe8d8ff0f39f1630cbd21c74155d5ae6710"
+dependencies = [
+ "ac-ffmpeg-build",
+ "ac-ffmpeg-features",
+ "cc",
+ "lazy_static",
+ "rustc_version",
+]
+
+[[package]]
+name = "ac-ffmpeg-build"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddd4d05f90fca97e6f5960cbca5154985db2b3e91592d874f0f22a8a34f53aa9"
+dependencies = [
+ "cfg-if",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
+name = "ac-ffmpeg-features"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6bdd0b60d57a35283db1b94d786f47857b412195943b38be68a9dbb481adb9c"
+dependencies = [
+ "ac-ffmpeg-build",
+ "cc",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -821,6 +868,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazy_static"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+
+[[package]]
 name = "lebe"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1337,6 +1390,7 @@ checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
 name = "rust-srt"
 version = "0.1.0"
 dependencies = [
+ "ac-ffmpeg 0.19.0",
  "anyhow",
  "bytes",
  "futures",
@@ -1345,6 +1399,7 @@ dependencies = [
  "opencv",
  "srt-tokio",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -1520,6 +1575,7 @@ version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0a55cb90afac5672b00954e3291846dd262cfef3b52d1b507f580180433373d3"
 dependencies = [
+ "ac-ffmpeg 0.18.2",
  "bytes",
  "futures",
  "log",

@@ -1,53 +1,53 @@
-use opencv::{
-    prelude::*,
-    videoio,
-    imgcodecs,
-    core,
-};
+use futures::SinkExt;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+use bytes::Bytes;
 use srt_tokio::SrtSocket;
-use tokio::time::{sleep, Duration};
-use futures_util::sink::SinkExt; // for send
+use anyhow::Result;
+use std::time::Instant;
+
+const FRAME_CHUNK_SIZE: usize = 1024 * 256; // e.g., 256KB chunks
+const FRAME_INTERVAL_MS: u64 = 33;           // ~30fps
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    println!("[SENDER] Connecting to FFmpeg UDP stream...");
-
-    // Open the UDP stream sent by ffmpeg.exe on Windows
-    let stream_url = "tcp://172.19.96.1:12345";
-    let mut cap = videoio::VideoCapture::from_file(stream_url, videoio::CAP_FFMPEG)?;
-
-    if !videoio::VideoCapture::is_opened(&cap)? {
-        panic!("[SENDER] Cannot open UDP stream from FFmpeg: {}", stream_url);
-    }
-
-    println!("[SENDER] Connecting to SRT receiver at 127.0.0.1:9000 ...");
-
-    // Build and connect the SRT socket (call = client)
-    let mut socket: SrtSocket = SrtSocket::builder()
-        .call("127.0.0.1:9000", None)
+async fn main() -> Result<()> {
+    println!("Sender: binding …");
+    let mut socket = SrtSocket::builder()
+        .listen_on(2223)
         .await?;
+    println!("Sender: client connected, starting frame stream …");
 
-    println!("[SENDER] Connected. Streaming frames...");
+    let mut file = File::open("video.mp4").await?;
+    let mut buf = vec![0u8; FRAME_CHUNK_SIZE];
+    let mut frame_index: u64 = 0;
 
     loop {
-        let mut frame = Mat::default();
-        cap.read(&mut frame)?;
-        if frame.empty() {
-            eprintln!("[SENDER] Empty frame, skipping...");
-            sleep(Duration::from_millis(10)).await;
-            continue;
+        let n = file.read(&mut buf).await?;
+        if n == 0 {
+            println!("Sender: end‐of‐file, sent {} frames", frame_index);
+            break;
         }
+        let data = &buf[..n];
+        let bytes = Bytes::copy_from_slice(data);
+        let now = Instant::now();
 
-        // Encode frame as JPEG
-        let mut buf = core::Vector::<u8>::new();
-        imgcodecs::imencode(".jpg", &frame, &mut buf, &core::Vector::new())?;
+        // Send single “frame” as one message
+        socket.send_all(
+            &mut futures::stream::iter(std::iter::once(Ok((now, bytes))))
+        ).await?;
 
-        // Send via SRT
-        socket.send((tokio::time::Instant::now().into(), buf.to_vec().into())).await?;
+        println!("Sender: sent frame {} ({} bytes)", frame_index, n);
+        frame_index += 1;
 
-        println!("[SENDER] ✅ Sent frame, size = {} bytes", buf.len());
-
-        // ~30 FPS
-        sleep(Duration::from_millis(33)).await;
+        // wait for next frame interval
+        tokio::time::sleep(tokio::time::Duration::from_millis(FRAME_INTERVAL_MS)).await;
     }
+
+    // give some time for receiver to catch up
+    println!("Sender: sleeping briefly before closing …");
+    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+    socket.close().await?;
+    println!("Sender: closed socket.");
+    Ok(())
 }
